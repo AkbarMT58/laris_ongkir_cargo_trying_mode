@@ -17,8 +17,6 @@ import (
 
 	"math"
 
-	"strings"
-
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -178,7 +176,7 @@ func GetAllOngkir(c echo.Context) error {
 		}
 
 		// estimate_darat_laut := strings.Join(time_darat, " ")
-		estimate_darat_udara := strings.Join(time_udara, " ")
+		// estimate_darat_udara := strings.Join(time_udara, " ")
 
 		fmt.Println("Estimate Time darat:", time_darat)
 		fmt.Println("Estimate Time udara:", time_udara)
@@ -252,25 +250,21 @@ func GetAllOngkir(c echo.Context) error {
 							harga_by_volume := ((berat_volume_metrik_udara) * biaya_berat_asli_bydata) //m3 kubik
 							Total_Ongkir_All := (harga_by_berat + harga_by_volume)
 
-							group := []Courier{{
+							Cost_darat := []CostDescription{{Cost: []Cost{{Etd: "", Note: "", Value: Total_Ongkir_All}}, Description: "", Service: ""}}
+							Cost_udara := []CostDescription{{Cost: []Cost{{Etd: "", Note: "", Value: Total_Ongkir_All}}, Description: "", Service: ""}}
+
+							join_group := append(Cost_darat, Cost_udara...)
+
+							Courier := []Courier{{
 
 								Code:  "laris",
-								Costs: []CostDescription{{Cost: []Cost{{Etd: estimate_darat_udara, Note: notes, Value: Total_Ongkir_All}}, Description: v.Tipe, Service: v.Tipe}},
+								Costs: []CostDescription{{}},
 								Name:  names,
 							}}
-
-							groups := []Courier{{
-
-								Code:  "laris",
-								Costs: []CostDescription{{Cost: []Cost{{Etd: estimate_darat_udara, Note: notes, Value: Total_Ongkir_All}}, Description: v.Tipe, Service: v.Tipe}},
-								Name:  names,
-							}}
-
-							join_group := append(group, groups...)
 
 							c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &echo.Map{"courier": join_group, "destination": v.Kecamatan_destinasi, "origin": v.Origin}})
 
-							fmt.Println("1 b total ongkir volum metrik saat > 10 kg di udara:", Total_Ongkir_All)
+							fmt.Println("1 b total ongkir volum metrik saat > 10 kg di udara:", Courier)
 
 						}
 
