@@ -122,6 +122,12 @@ func GetAllOngkir(c echo.Context) error {
 	if err != nil {
 		log.Println(err)
 	}
+
+	if err := trans.Origin == "" || trans.Kecamatan_destinasi == "" || trans.Berat_input == 0 || trans.Konstanta_Min_Berat == 0 || trans.Volume_input == 0 || trans.Konstanta_volume_darat_laut == 0 || trans.Konstanta_volume_udara == 0; err == true {
+
+		return c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "Query Param is not valid"})
+
+	}
 	//deklarasi parameter
 	berat_asli := trans.Berat_input
 	origin_place := trans.Origin
@@ -167,101 +173,44 @@ func GetAllOngkir(c echo.Context) error {
 
 	var join_cost_description []CostDescription
 	var courier []Courier
-	var berat_final_darat int
-	var berat_final_udara int
+	// var berat_final_darat int
+	// var berat_final_udara int
 
 	for _, data_all := range result.larisongkirs {
-
+		if err := len(data_all); err == 0 {
+			return c.JSON(http.StatusNotFound, responses.UserResponse{Status: http.StatusNotFound, Message: "Data Not Found"})
+		}
 		for i := 0; i < len(data_all); i++ {
 
 			fmt.Println("data all i:", data_all[i])
 			fmt.Println("jumlah data :", len(data_all))
 
-			estimate_darat_laut := data_all[0].Min_sla_hari + "-" + data_all[0].Max_sla_hari + " hari"
-			estimate_darat_udara := data_all[1].Min_sla_hari + "-" + data_all[1].Max_sla_hari + " hari"
+			estimate_hari := data_all[i].Min_sla_hari + "-" + data_all[i].Max_sla_hari + " hari"
 
-			// destinasi := data_all[0].Kecamatan_destinasi
-			// origin := data_all[0].Origin
+			tipe_pengiriman := data_all[i].Tipe
 
-			tipe_pengiriman_darat := data_all[0].Tipe
-			tipe_pengiriman_udara := data_all[1].Tipe
 			berat_asli := berat_asli
 
-			harga_perkg_data_darat := data_all[0].Harga_perkg
-			harga_perkg_darat, _ := strconv.Atoi(harga_perkg_data_darat)
+			harga_perkg_data := data_all[i].Harga_perkg
 
-			harga_perkg_data_udara := data_all[1].Harga_perkg
-			harga_perkg_udara, _ := strconv.Atoi(harga_perkg_data_udara)
+			harga_perkg, _ := strconv.Atoi(harga_perkg_data)
 
-			//Total_Ongkir := Hitung_Total_Ongkir(tipe_pengiriman, harga_perkg_int, berat_asli, int(konstanta_volume_darat), int(konstanta_volume_udara), trans.Konstanta_Min_Berat, int(berat_volume_metrik_daratlaut), int(berat_volume_metrik_udara))
-			// Total_Ongkir := 20000000
+			Total_Berat := Hitung_Total_Berat(tipe_pengiriman, berat_asli, trans.Konstanta_Min_Berat, int(berat_volume_metrik_daratlaut), int(berat_volume_metrik_udara))
+			fmt.Println("Total_Berat:", Total_Berat)
 
-			//kondisi if
+			Total_Ongkir := Total_Berat * harga_perkg //harga per kg
+			fmt.Println("Total_Ongkir:", Total_Ongkir)
 
-			//jika berat volum darat > berat asli
+			CostDesc := []CostDescription{{Cost: []Cost{{Etd: estimate_hari, Note: "", Value: float64(Total_Ongkir)}}, Description: tipe_pengiriman, Service: tipe_pengiriman}}
 
-			if berat_asli < int(berat_volume_metrik_daratlaut) {
-
-				berat_final_darat = int(berat_volume_metrik_daratlaut)
-
-			} else {
-
-				berat_final_darat = berat_asli
-
-			}
-
-			//jika berat volum udara > berat asli
-
-			if berat_asli < int(berat_volume_metrik_udara) {
-
-				berat_final_udara = int(berat_volume_metrik_udara)
-
-			} else {
-
-				berat_final_udara = berat_asli
-
-			}
-
-			//jika berat final < konstanta min berat
-
-			if berat_final_darat < trans.Konstanta_Min_Berat {
-
-				berat_final_darat = trans.Konstanta_Min_Berat
-
-			}
-
-			//jika berat volume udara < konstanta min berat
-			if berat_final_udara < trans.Konstanta_Min_Berat {
-
-				berat_final_udara = trans.Konstanta_Min_Berat
-
-			}
-
-			//darat
-
-			harga_by_berat_darat := berat_final_darat * harga_perkg_darat //harga per kg
-			Total_Ongkir_All_Darat := harga_by_berat_darat
-
-			//udara
-
-			harga_by_berat_udara := berat_final_udara * harga_perkg_udara //harga per kg
-			Total_Ongkir_All_Udara := harga_by_berat_udara
-
-			// Cost_darat := []Courier{{Code: "laris", Costs: []CostDescription{{Cost: []Cost{{Etd: estimate_darat_laut, Note: "", Value: float64(Total_Ongkir_All_Darat)}}, Description: tipe_pengiriman_darat, Service: tipe_pengiriman_darat}}, Name: ""}}
-			// Cost_udara := []Courier{{Code: "laris", Costs: []CostDescription{{Cost: []Cost{{Etd: estimate_darat_udara, Note: "", Value: float64(Total_Ongkir_All_Udara)}}, Description: tipe_pengiriman_udara, Service: tipe_pengiriman_udara}}, Name: ""}}
-
-			Cost_darat := []CostDescription{{Cost: []Cost{{Etd: estimate_darat_laut, Note: "", Value: float64(Total_Ongkir_All_Darat)}}, Description: tipe_pengiriman_darat, Service: tipe_pengiriman_darat}}
-			Cost_udara := []CostDescription{{Cost: []Cost{{Etd: estimate_darat_udara, Note: "", Value: float64(Total_Ongkir_All_Udara)}}, Description: tipe_pengiriman_udara, Service: tipe_pengiriman_udara}}
-
-			join_cost_description = append(Cost_darat, Cost_udara...)
-
-			//batas kondisi
+			join_cost_description = append(join_cost_description, CostDesc...)
 
 		}
 
 	}
 	courier = []Courier{{Code: "laris", Costs: join_cost_description, Name: ""}}
-	return c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &echo.Map{"courier": courier, "destination": kecamatan_dest, "origin": origin_place}})
+
+	return c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &echo.Map{"courier": courier, "destination": kecamatan_dest, "origin": origin_place}})
 
 }
 
@@ -293,32 +242,88 @@ func estimate_time_by_tipe(td, tu, k, o string) interface{} {
 	return data_all
 }
 
-// func Hitung_Total_Ongkir(tipe_kirim string, harga_perkg, berat_asli, k_d, k_u, k_b, berat_volum_darat, berat_volum_udara int) int {
+func Hitung_Total_Berat(tipe_kirim string, berat_asli, k_min_berat, berat_volum_darat, berat_volum_udara int) int {
 
-// 	var total_ongkir int
+	var berat_final int
+	var berat_volum int
 
-// 	if berat_asli < k_b {
-
-// 		tot_ongkir := (berat_asli) * harga_perkg
-
-// 		total_ongkir = append(total_ongkir, tot_ongkir)
-
-// 	}
-
-// 	return total_ongkir
-
-// }
-
-func merge(a, b interface{}) interface{} {
-
-	jb, err := json.Marshal(b)
-	if err != nil {
-		fmt.Println("Marshal error b:", err)
+	if tipe_kirim == "darat" {
+		berat_volum = berat_volum_darat
+	} else {
+		berat_volum = berat_volum_udara
 	}
-	err = json.Unmarshal(jb, &a)
-	if err != nil {
-		fmt.Println("Unmarshal error b-a:", err)
+	fmt.Println("tipe_kirim:", tipe_kirim)
+	fmt.Println("berat_volum:", berat_volum)
+	if berat_asli < berat_volum {
+
+		berat_final = berat_volum
+
+	} else {
+
+		berat_final = berat_asli
+
 	}
 
-	return a
+	//jika berat final < konstanta min berat
+
+	if berat_final < k_min_berat {
+
+		berat_final = k_min_berat
+
+	}
+
+	return berat_final
+
+}
+
+func Hitung_Total_Ongkir_Darat(tipe_kirim string, harga_perkg, berat_asli, k_min_berat, berat_volum_darat, berat_volum_udara int) int {
+
+	var berat_final_darat int
+
+	if berat_asli < berat_volum_darat {
+
+		berat_final_darat = berat_volum_darat
+
+	} else {
+
+		berat_final_darat = berat_asli
+
+	}
+
+	//jika berat final < konstanta min berat
+
+	if berat_final_darat < k_min_berat {
+
+		berat_final_darat = k_min_berat
+
+	}
+
+	return berat_final_darat
+
+}
+
+func Hitung_Total_Ongkir_Udara(tipe_kirim string, harga_perkg, berat_asli, k_min_berat, berat_volum_darat, berat_volum_udara int) int {
+
+	var berat_final_udara int
+
+	if berat_asli < berat_volum_udara {
+
+		berat_final_udara = berat_volum_udara
+
+	} else {
+
+		berat_final_udara = berat_asli
+
+	}
+
+	//jika berat final < konstanta min berat
+
+	if berat_final_udara < k_min_berat {
+
+		berat_final_udara = k_min_berat
+
+	}
+
+	return berat_final_udara
+
 }
