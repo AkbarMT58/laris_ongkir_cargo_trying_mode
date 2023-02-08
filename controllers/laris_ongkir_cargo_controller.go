@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"time"
 
@@ -26,18 +27,18 @@ var LarisCargoCollection *mongo.Collection = configs.GetCollection(configs.DB, "
 var validatecargo *validator.Validate
 
 type array_mode struct {
-	larisongkirs []larisongkir
+	larisongkirs [][]larisongkir
 }
 
 type larisongkir struct {
-	Origin              []string `json:"origin"`
-	Provinsi_destinasi  string   `json:"provinsi_destinasi"`
-	Kota_desinasi       string   `json:"kota_destinasi"`
-	Kecamatan_destinasi string   `json:"kecamatan_destinasi"`
-	Min_sla_hari        string   `json:"min_sla_hari"`
-	Max_sla_hari        string   `json:"max_sla_hari"`
-	Harga_perkg         string   `json:"harga_kg"`
-	Tipe                string   `json:"tipe"`
+	Origin              string `json:"origin"`
+	Provinsi_destinasi  string `json:"provinsi_destinasi"`
+	Kota_destinasi      string `json:"kota_destinasi"`
+	Kecamatan_destinasi string `json:"kecamatan_destinasi"`
+	Min_sla_hari        string `json:"min_sla_hari"`
+	Max_sla_hari        string `json:"max_sla_hari"`
+	Harga_perkg         string `json:"harga_kg"`
+	Tipe                string `json:"tipe"`
 }
 
 type Head_Array struct {
@@ -108,6 +109,7 @@ func GetAllOngkir(c echo.Context) error {
 		Notes                          string  `json:"note"`
 		Name                           string  `json:"name"`
 		Konstanta_Min_Berat            int     `json:"konstanta_min_berat"`
+		Origin                         string  `json:"origin"`
 	}
 
 	type Result_Ongkir struct {
@@ -122,6 +124,7 @@ func GetAllOngkir(c echo.Context) error {
 	}
 	//deklarasi parameter
 	berat_asli := trans.Berat_input
+	origin_place := trans.Origin
 	// biaya_berat_limit_10_int_darat_laut, _ := strconv.ParseFloat(trans.Biaya_berat_limit_10_daratlaut, 64)
 	// biaya_berat_limit_10_int_udara, _ := strconv.ParseFloat(trans.Biaya_berat_limit_10_udara, 64)
 	konstanta_volume_darat := (trans.Konstanta_volume_darat_laut)
@@ -142,7 +145,7 @@ func GetAllOngkir(c echo.Context) error {
 	// tipe_pengiriman_darat := "darat"
 	// tipe_pengiriman_udara := "udara"
 
-	data_all_call := estimate_time_by_tipe("darat", "udara", kecamatan_dest)
+	data_all_call := estimate_time_by_tipe("darat", "udara", kecamatan_dest, origin_place)
 
 	jsonData, err := json.Marshal(data_all_call)
 	if err != nil {
@@ -150,87 +153,125 @@ func GetAllOngkir(c echo.Context) error {
 
 	}
 
-	fmt.Printf("json data: %s\n", jsonData)
 	//fmt.Println("data asli :", data_all_call)
 
-	dataku := []byte(`{
-		"id": "363364386534336632353064343163646463393231653238",
-		"origin": "Jakarta",
-		"provinsi_destinasi": "Aceh",
-		"kota_destinasi": "Kota Lhokseumawe",
-		"kecamatan_destinasi": "Banda Sakti",
-		"min_sla_hari": "5",
-		"max_sla_hari": "6",
-		"harga_kg": "4300",
-		"tipe": "darat"
-	}`)
-
-	readdata := []array_mode{}
-
+	readdata := array_mode{}
 	result := readdata
-	// result := MyData{}
-	json.Unmarshal((dataku), &result)
 
-	err = PrettyPrint(result)
-	if err != nil {
-		return err
+	if err := json.Unmarshal((jsonData), &result.larisongkirs); err != nil {
+		fmt.Println(err)
+		panic(1)
 	}
 
-	//fmt.Println("Tampilkan Data All:", result)
+	// var join_ongkir []interface{}
 
-	// harga_by_berat := 0.0
-	// harga_by_volume := ((berat_volume_metrik_udara) * 4300) //m3 kubik
-	// Total_Ongkir_All := (harga_by_berat + harga_by_volume)
+	var join_cost_description []CostDescription
+	var courier []Courier
+	var berat_final_darat int
+	var berat_final_udara int
 
-	// Cost_darat := []CostDescription{{Cost: []Cost{{Etd: "", Note: "", Value: Total_Ongkir_All}}, Description: "", Service: ""}}
-	// Cost_udara := []CostDescription{{Cost: []Cost{{Etd: "", Note: "", Value: Total_Ongkir_All}}, Description: "", Service: ""}}
+	for _, data_all := range result.larisongkirs {
 
-	// join_group := append(Cost_darat, Cost_udara...)
+		for i := 0; i < len(data_all); i++ {
 
-	return c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &echo.Map{"courier": data_all_call, "destination": "", "origin": ""}})
+			fmt.Println("data all i:", data_all[i])
+			fmt.Println("jumlah data :", len(data_all))
+
+			estimate_darat_laut := data_all[0].Min_sla_hari + "-" + data_all[0].Max_sla_hari + " hari"
+			estimate_darat_udara := data_all[1].Min_sla_hari + "-" + data_all[1].Max_sla_hari + " hari"
+
+			// destinasi := data_all[0].Kecamatan_destinasi
+			// origin := data_all[0].Origin
+
+			tipe_pengiriman_darat := data_all[0].Tipe
+			tipe_pengiriman_udara := data_all[1].Tipe
+			berat_asli := berat_asli
+
+			harga_perkg_data_darat := data_all[0].Harga_perkg
+			harga_perkg_darat, _ := strconv.Atoi(harga_perkg_data_darat)
+
+			harga_perkg_data_udara := data_all[1].Harga_perkg
+			harga_perkg_udara, _ := strconv.Atoi(harga_perkg_data_udara)
+
+			//Total_Ongkir := Hitung_Total_Ongkir(tipe_pengiriman, harga_perkg_int, berat_asli, int(konstanta_volume_darat), int(konstanta_volume_udara), trans.Konstanta_Min_Berat, int(berat_volume_metrik_daratlaut), int(berat_volume_metrik_udara))
+			// Total_Ongkir := 20000000
+
+			//kondisi if
+
+			//jika berat volum darat > berat asli
+
+			if berat_asli < int(berat_volume_metrik_daratlaut) {
+
+				berat_final_darat = int(berat_volume_metrik_daratlaut)
+
+			} else {
+
+				berat_final_darat = berat_asli
+
+			}
+
+			//jika berat volum udara > berat asli
+
+			if berat_asli < int(berat_volume_metrik_udara) {
+
+				berat_final_udara = int(berat_volume_metrik_udara)
+
+			} else {
+
+				berat_final_udara = berat_asli
+
+			}
+
+			//jika berat final < konstanta min berat
+
+			if berat_final_darat < trans.Konstanta_Min_Berat {
+
+				berat_final_darat = trans.Konstanta_Min_Berat
+
+			}
+
+			//jika berat volume udara < konstanta min berat
+			if berat_final_udara < trans.Konstanta_Min_Berat {
+
+				berat_final_udara = trans.Konstanta_Min_Berat
+
+			}
+
+			//darat
+
+			harga_by_berat_darat := berat_final_darat * harga_perkg_darat //harga per kg
+			Total_Ongkir_All_Darat := harga_by_berat_darat
+
+			//udara
+
+			harga_by_berat_udara := berat_final_udara * harga_perkg_udara //harga per kg
+			Total_Ongkir_All_Udara := harga_by_berat_udara
+
+			// Cost_darat := []Courier{{Code: "laris", Costs: []CostDescription{{Cost: []Cost{{Etd: estimate_darat_laut, Note: "", Value: float64(Total_Ongkir_All_Darat)}}, Description: tipe_pengiriman_darat, Service: tipe_pengiriman_darat}}, Name: ""}}
+			// Cost_udara := []Courier{{Code: "laris", Costs: []CostDescription{{Cost: []Cost{{Etd: estimate_darat_udara, Note: "", Value: float64(Total_Ongkir_All_Udara)}}, Description: tipe_pengiriman_udara, Service: tipe_pengiriman_udara}}, Name: ""}}
+
+			Cost_darat := []CostDescription{{Cost: []Cost{{Etd: estimate_darat_laut, Note: "", Value: float64(Total_Ongkir_All_Darat)}}, Description: tipe_pengiriman_darat, Service: tipe_pengiriman_darat}}
+			Cost_udara := []CostDescription{{Cost: []Cost{{Etd: estimate_darat_udara, Note: "", Value: float64(Total_Ongkir_All_Udara)}}, Description: tipe_pengiriman_udara, Service: tipe_pengiriman_udara}}
+
+			join_cost_description = append(Cost_darat, Cost_udara...)
+
+			//batas kondisi
+
+		}
+
+	}
+	courier = []Courier{{Code: "laris", Costs: join_cost_description, Name: ""}}
+	return c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &echo.Map{"courier": courier, "destination": kecamatan_dest, "origin": origin_place}})
 
 }
 
-func hitung_berat_final(Pos Input_Request) int {
-
-	// B_A := Pos.Berat
-	// B_V_D := Pos.Berat_Volum_Darat
-	// B_V_U := Pos.Berat_Volum_Udara
-	// K_B := Pos.Konstanta_berat
-
-	// if B_A > B_V_D {
-
-	// 	B_F := B_A
-
-	// 	fmt.Println(B_F)
-
-	// } else {
-
-	// 	B_F := B_V_D
-
-	// 	fmt.Println(B_F)
-
-	// }
-
-	return 100
-
-}
-
-// func compare_konstanta_harga() int {
-
-// }
-
-func hitung_harga_final(c echo.Context) {
-
-}
-
-func estimate_time_by_tipe(td, tu, k string) interface{} {
+func estimate_time_by_tipe(td, tu, k, o string) interface{} {
 
 	var dataongkir []models.Laris_ongkir
 
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-	results, err := LarisCargoCollection.Find(ctx, bson.M{"kecamatan_destinasi": k})
+	results, err := LarisCargoCollection.Find(ctx, bson.M{"kecamatan_destinasi": k, "origin": o})
 
 	if err != nil {
 		fmt.Println(err)
@@ -245,38 +286,28 @@ func estimate_time_by_tipe(td, tu, k string) interface{} {
 		dataongkir = append(dataongkir, ongkirall)
 	}
 
-	var est_time_fin []string
 	var data_all []interface{}
 
-	for i, v := range dataongkir {
-
-		if dataongkir[i].Tipe == td {
-
-			est_time := v.Min_sla_hari + "-" + v.Max_sla_hari + " hari"
-
-			est_time_fin = append(est_time_fin, est_time)
-
-		}
-		if dataongkir[i].Tipe == tu {
-
-			// est_time := v.Min_sla_hari + "-" + v.Max_sla_hari + " hari"
-
-			//est_time_fin = append(est_time_fin, est_time)
-
-			data_all = append(data_all, dataongkir)
-
-		}
-
-	}
-
-	// estimate_time := strings.Join(est_time_fin, " ")
-
-	// fmt.Println("Hitung Waktu function:", estimate_time)
-
-	//fmt.Println("Tampilkan Data All:", data_all)
+	data_all = append(data_all, dataongkir)
 
 	return data_all
 }
+
+// func Hitung_Total_Ongkir(tipe_kirim string, harga_perkg, berat_asli, k_d, k_u, k_b, berat_volum_darat, berat_volum_udara int) int {
+
+// 	var total_ongkir int
+
+// 	if berat_asli < k_b {
+
+// 		tot_ongkir := (berat_asli) * harga_perkg
+
+// 		total_ongkir = append(total_ongkir, tot_ongkir)
+
+// 	}
+
+// 	return total_ongkir
+
+// }
 
 func merge(a, b interface{}) interface{} {
 
@@ -290,12 +321,4 @@ func merge(a, b interface{}) interface{} {
 	}
 
 	return a
-}
-
-func PrettyPrint(v interface{}) (err error) {
-	b, err := json.MarshalIndent(v, "", "\t")
-	if err == nil {
-		fmt.Println(string(b))
-	}
-	return err
 }
